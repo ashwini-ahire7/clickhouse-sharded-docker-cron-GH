@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+
+import subprocess
+import socket
+from clickhouse_driver import Client
+
+def run_script(script_path):
+    # Run the given script and capture its output
+    result = subprocess.run([script_path], capture_output=True, text=True)
+    return result.stdout.strip()  # Ensure we strip unnecessary whitespace
+
+def get_public_ip():
+    # Fetch the public IP address
+    result = subprocess.run(["curl", "http://checkip.amazonaws.com"], capture_output=True, text=True)
+    return result.stdout.strip()  # Remove any newline characters
+
+def main():
+    # Define the scripts to run and their names
+    scripts = {
+        "/usr/local/bin/pt-summary": "pt_summary_script"
+    }
+
+    # Get hostname and public IP address for all entries
+    hostname = socket.gethostname()
+    public_ip = get_public_ip()
+
+    # Connect to ClickHouse
+    client = Client(host='44.220.92.9', port=9000, user='default', password='', database='default')
+
+    # Iterate over scripts and insert their outputs into the database
+    for script_path, script_name in scripts.items():
+        output = run_script(script_path)
+        data = (hostname, output.replace('"', '\\"'), script_name, public_ip)  # Prepare data tuple, escaping double quotes in output
+        client.execute('INSERT INTO inception.audit_inception (Hostname, Value, script_name, pub_ip) VALUES', [data])
+
+if __name__ == "__main__":
+    main()
